@@ -1,4 +1,6 @@
 import os
+import numpy as np
+import cv2
 from tkinter import Tk, filedialog, simpledialog
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -15,6 +17,7 @@ class LittleTest(object):
 
     def __init__(self, name=DEFAULT_LITTLE_TEST):
         self.name = name
+        self.selected_pdf_path = None
 
     # PDFファイルの確認
     def allowed_file(self, filename):
@@ -62,17 +65,46 @@ class LittleTest(object):
         if selection and selection.isdigit():
             index = int(selection) - 1
             if 0 <= index < len(pdf_paths):
-                selected_pdf = pdf_paths[index]
-                return f"Selected PDF path: {selected_pdf}"
+                self.selected_pdf_path = pdf_paths[index]  # 選択されたPDFファイルのパスを格納
+                return f"Selected PDF path: {self.selected_pdf_path}"
             else:
                 return "Invalid selection."
         else:
             return "No selection made or invalid input."
 
     def read(self):
+        # popplerの設定
+        poppler_path = r"C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\models\poppler\Library\bin"
+
+        if self.selected_pdf_path is None:
+            return "No PDF file selected."
+
         # PDFの各ページを画像に変換
-        #images = convert_from_path()
-        pass
+        images = convert_from_path(self.selected_pdf_path, poppler_path=poppler_path)
+
+        # 画像の総枚数をターミナルに出力
+        total_pages = len(images)
+        print(f"Total pages: {total_pages}")
+
+        # 各ページの画像を表示（最大3枚まで）
+        for i, image in enumerate(images[:3]):
+            # PIL.ImageからNumPy配列に変換
+            image_np = np.array(image)
+
+            # 画像のサイズをターミナルに出力
+            height, width, _ = image_np.shape
+            print(f"Page {i + 1}: {width}x{height}")
+
+            # RGBからBGRに変換 (OpenCVはBGR形式を使用するため)
+            image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+
+            # 画像を表示
+            cv2.imshow(f'Page {i + 1}', image_bgr)
+            cv2.waitKey(0)  # キーが押されるまで待機
+
+        # すべてのウィンドウを閉じる
+        cv2.destroyAllWindows()
+
 
 
 
