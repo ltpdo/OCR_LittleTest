@@ -1,2 +1,4 @@
 # LittleTestPdfフォルダを無視
 OcrProgram/LittleTestPdf/
+# BinarizedLittleTestImageフォルダを無視
+OcrProgram/BinarizedLittleTestImage/

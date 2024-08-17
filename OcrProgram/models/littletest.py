@@ -2,6 +2,7 @@ import os
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from PIL import Image
 from tkinter import Tk, filedialog, simpledialog
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -97,8 +98,8 @@ class LittleTest(object):
 
         image_bgr_list = []
 
-        # 各ページの画像を表示（最大3枚まで）
-        for i, image in enumerate(images[:1]):
+        # 各ページの画像を処理
+        for i, image in enumerate(images):
             # PIL.ImageからNumPy配列に変換
             image_np = np.array(image)
 
@@ -110,7 +111,7 @@ class LittleTest(object):
             elif (width, height) != previous_size:
                 size_is_consistent = False
 
-            # 最初の画像か、異なるサイズの画像が見つかった場合にサイズを出力
+            # サイズの一貫性を確認するための出力
             if i == 0 or not size_is_consistent:
                 print(f"Page {i + 1}: {width}x{height}")
                 previous_size = (width, height)
@@ -119,9 +120,13 @@ class LittleTest(object):
             image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
             image_bgr_list.append(image_bgr)
 
-        # 画像の表示をpltで行う
-        plt.imshow(cv2.cvtColor(image_bgr_list[0], cv2.COLOR_BGR2RGB))
-        plt.show()
+        # 画像の表示をpltで行う（最大3ページまで表示）
+        for i, image_bgr in enumerate(image_bgr_list[:3]):  # 最初の3ページを表示
+            plt.figure()
+            plt.imshow(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+            plt.title(f"Page {i + 1}")
+            plt.axis('off')  # 軸を表示しない
+            plt.show()
 
         # すべての画像が同じサイズの場合、統一サイズとして出力
         if size_is_consistent:
@@ -146,6 +151,10 @@ class PreprocessingLittleTest(LittleTest):
 
     def convert_binarized_image(self):
         image_binarized_list = []
+
+        # 保存先フォルダを作成（存在しない場合は新規作成）
+        save_folder = r"C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\BinarizedLittleTestImage"
+        os.makedirs(save_folder, exist_ok=True)  # フォルダが存在しない場合は作成
 
         # 親クラスのread_and_convertメソッドを呼び出し
         image_bgr_list = self.read_and_convert()
@@ -181,9 +190,18 @@ class PreprocessingLittleTest(LittleTest):
             retval, image_binary = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
             image_binarized_list.append(image_binary)
 
-        # 画像の表示をpltで行う
-        plt.imshow(cv2.cvtColor(image_binarized_list[0], cv2.COLOR_BGR2RGB))
-        plt.show()
+            # 二値化された画像をPILで保存
+            image_pil = Image.fromarray(image_binary)
+            save_path = os.path.join(save_folder, f"binarized_image_{i + 1}.png")
+            try:
+                image_pil.save(save_path)
+                print(f"Image {i + 1} saved to {save_path}")
+            except Exception as e:
+                print(f"Failed to save Image {i + 1}. Error: {e}")
 
+        # 最初の二値化画像を表示
+        if image_binarized_list:
+            plt.imshow(image_binarized_list[0], cmap='gray')
+            plt.show()
 
 
