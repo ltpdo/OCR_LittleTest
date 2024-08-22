@@ -1,22 +1,73 @@
-from PIL import Image
-import numpy as np
-import os
-import cv2
+import tkinter as tk
+from PIL import Image, ImageTk
+import pyautogui
 
-# ダミーの二値化画像データを作成
-dummy_image = np.zeros((100, 100), dtype=np.uint8)  # 100x100の黒画像
-cv2.circle(dummy_image, (50, 50), 25, (255, 255, 255), -1)  # 白い円を描画
+RESIZE_RATIO = 2  # 縮小倍率の規定
 
-# NumPy配列をPIL Imageに変換
-image_pil = Image.fromarray(dummy_image)
+class ImageAnnotator:
+    def __init__(self, root, file_path):
+        self.root = root
+        self.file_path = file_path
+        self.start_x = None
+        self.start_y = None
+        self.rectangles = []  # 座標を保存するリスト
 
-# 保存先フォルダ
-save_folder = r"C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\BinarizedLittleTestImage"
-os.makedirs(save_folder, exist_ok=True)
+        # 指定された画像ファイルを読み込み、リサイズ
+        self.img = Image.open(self.file_path)
+        self.img_resized = self.img.resize(
+            (int(self.img.width / RESIZE_RATIO), int(self.img.height / RESIZE_RATIO)),
+            Image.BILINEAR
+        )
 
-# 保存ファイルパス
-save_path = os.path.join(save_folder, "test_image_pil.png")
+        # Tkinterで表示できるように画像を変換
+        self.img_tk = ImageTk.PhotoImage(self.img_resized)
 
-# 画像を保存
-image_pil.save(save_path)
-print(f"Image successfully saved to {save_path}")
+        # Canvasウィジェットの設定
+        self.canvas = tk.Canvas(root, bg="black", width=self.img_resized.width, height=self.img_resized.height)
+        self.canvas.create_image(0, 0, image=self.img_tk, anchor=tk.NW)
+        self.canvas.pack()
+
+        # イベントバインディング
+        self.canvas.bind("<ButtonPress-1>", self.start_point_get)
+        self.canvas.bind("<B1-Motion>", self.rect_drawing)
+        self.canvas.bind("<ButtonRelease-1>", self.release_action)
+
+    def start_point_get(self, event):
+        # スタートポイントを設定
+        self.start_x, self.start_y = event.x, event.y
+        # 古い矩形を削除
+        self.canvas.delete("rect1")
+
+    def rect_drawing(self, event):
+        if self.start_x is None or self.start_y is None:
+            return
+
+        end_x = min(self.img_resized.width, event.x)
+        end_y = min(self.img_resized.height, event.y)
+
+        # 古い矩形を削除（ドラッグ中に一時的に表示する）
+        self.canvas.delete("rect1")
+
+        # 新しい矩形を描画
+        self.canvas.create_rectangle(self.start_x, self.start_y, end_x, end_y, outline="red", tag="rect1")
+
+    def release_action(self, event):
+        if self.start_x is None or self.start_y is None:
+            return
+
+        # 最終的な座標を取得し、リストに追加
+        start_x, start_y, end_x, end_y = [round(n * RESIZE_RATIO) for n in self.canvas.coords("rect1")]
+        self.rectangles.append((start_x, start_y, end_x, end_y))
+
+        # スタートポイントをリセット
+        self.start_x = self.start_y = None
+
+        # 座標を表示
+        print(f"start_x: {start_x}, start_y: {start_y}, end_x: {end_x}, end_y: {end_y}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.attributes("-topmost", True)
+    file_path = r'C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\BinarizedLittleTestImage\binarized_image_1.png'
+    annotator = ImageAnnotator(root, file_path)
+    root.mainloop()

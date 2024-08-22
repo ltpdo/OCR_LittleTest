@@ -2,7 +2,9 @@ import os
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from PIL import Image
+import pyautogui
+from PIL import Image, ImageTk
+import tkinter as tk
 from tkinter import Tk, filedialog, simpledialog
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -13,6 +15,7 @@ from OcrProgram.views import console
 DEFAULT_LITTLE_TEST = "DEFAULT"
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "../LittleTestPdf")
 ALLOWED_EXTENSIONS = {"pdf"}
+RESIZE_RATIO = 2
 
 
 # PDFファイルの確認
@@ -38,25 +41,25 @@ class LittleTest(object):
         root = Tk()
         root.withdraw()
         file_path = filedialog.askopenfilename(
-            title="Select a PDF file",
+            title="PDFファイルを選んでください。",
             filetypes=[("PDF files", "*.pdf")]
         )
         if not file_path:
-            return 'No file selected'
+            return 'ファイルが選ばれていません。'
         filename = secure_filename(os.path.basename(file_path))
         if allowed_file(filename):
             destination_path = os.path.join(UPLOAD_FOLDER, filename)
             os.rename(file_path, destination_path)
-            return f"File uploaded successfully: {destination_path}"
+            return f"ファイルのアップロードが成功しました。: {destination_path}"
         else:
-            return "Invalid file type. Only PDFs are allowed."
+            return "PDFファイルではありません。"
 
     # PDFファイルの選択
     def select_pdf(self):
         pdf_paths = get_pdf_paths()
 
         if not pdf_paths:
-            return "No PDF files found in the folder."
+            return "PDFファイルが見つかりません。"
 
         # Tkinterを非表示モードで初期化
         root = Tk()
@@ -64,7 +67,8 @@ class LittleTest(object):
 
         # 選択肢としてPDFファイルのパスを列挙
         pdf_paths_str = "\n".join([f"{i + 1}: {os.path.basename(path)}" for i, path in enumerate(pdf_paths)])
-        selection = simpledialog.askstring("Select a PDF", f"Choose a PDF file:\n\n{pdf_paths_str}\n\nEnter number:")
+        selection = simpledialog.askstring("PDFファイルを選んでください。",
+                                           f"PDFファイルを選んでください。:\n\n{pdf_paths_str}\n\n数字を入力してください。:")
 
         # ユーザーが番号を入力した場合
         if selection and selection.isdigit():
@@ -90,7 +94,7 @@ class LittleTest(object):
 
         # 画像の総枚数をターミナルに出力
         total_pages = len(images)
-        print(f"Total pages: {total_pages}")
+        print(f"合計枚数: {total_pages}")
 
         # 画像のサイズを保持するための変数
         previous_size = None
@@ -120,19 +124,18 @@ class LittleTest(object):
             image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
             image_bgr_list.append(image_bgr)
 
-        # 画像の表示をpltで行う（最大3ページまで表示）
-        for i, image_bgr in enumerate(image_bgr_list[:3]):  # 最初の3ページを表示
+        self.display_images(image_bgr_list)
+
+        return image_bgr_list
+
+    # 画像を表示するメソッド
+    def display_images(self, images, max_pages=3):
+        for i, image_bgr in enumerate(images[:max_pages]):  # 最初のmax_pagesページを表示
             plt.figure()
             plt.imshow(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
             plt.title(f"Page {i + 1}")
             plt.axis('off')  # 軸を表示しない
             plt.show()
-
-        # すべての画像が同じサイズの場合、統一サイズとして出力
-        if size_is_consistent:
-            print(f"All pages have the same size: {previous_size[0]}x{previous_size[1]}")
-
-        return image_bgr_list
 
 
 class PreprocessingLittleTest(LittleTest):
@@ -199,9 +202,73 @@ class PreprocessingLittleTest(LittleTest):
             except Exception as e:
                 print(f"Failed to save Image {i + 1}. Error: {e}")
 
-        # 最初の二値化画像を表示
+        # 最初の二値化された画像を表示（任意）
         if image_binarized_list:
-            plt.imshow(image_binarized_list[0], cmap='gray')
-            plt.show()
+            self.display_images(image_binarized_list)
 
+    def select_file(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Image files", "*.png;*.jpg;*.jpeg")],
+            title="Select an Image file"
+        )
+        if not file_path:
+            raise ValueError("画像ファイルが選択されていません。")
+        return file_path
 
+    def annotate_image(self):
+        file_path = self.select_file()
+        annotator = self.ImageAnnotator(file_path)
+        annotator.annotate_image()
+
+    class ImageAnnotator:
+        def __init__(self, file_path):
+            self.file_path = file_path
+            self.start_x = None
+            self.start_y = None
+            self.rectangles = []
+            self.img_tk = None  # インスタンス変数としてimg_tkを定義
+
+        def start_point_get(self, event, canvas):
+            self.start_x, self.start_y = event.x, event.y
+            canvas.delete("rect1")
+
+        def rect_drawing(self, event, canvas):
+            if self.start_x is None or self.start_y is None:
+                return
+
+            end_x = min(canvas.winfo_width(), event.x)
+            end_y = min(canvas.winfo_height(), event.y)
+
+            canvas.delete("rect1")
+            canvas.create_rectangle(self.start_x, self.start_y, end_x, end_y, outline="red", tag="rect1")
+
+        def release_action(self, event, canvas):
+            if self.start_x is None or self.start_y is None:
+                return
+
+            start_x_val, start_y_val, end_x_val, end_y_val = [round(n * RESIZE_RATIO) for n in canvas.coords("rect1")]
+            self.rectangles.append((start_x_val, start_y_val, end_x_val, end_y_val))
+
+            self.start_x = self.start_y = None
+            print(f"start_x: {start_x_val}, start_y: {start_y_val}, end_x: {end_x_val}, end_y: {end_y_val}")
+
+        def annotate_image(self):
+            root = tk.Tk()
+            root.attributes("-topmost", True)
+
+            img = Image.open(self.file_path)
+            img_resized = img.resize(
+                (int(img.width / RESIZE_RATIO), int(img.height / RESIZE_RATIO)),
+                Image.BILINEAR
+            )
+
+            self.img_tk = ImageTk.PhotoImage(img_resized, master=root)  # img_tkをインスタンス変数として保存
+            canvas = tk.Canvas(root, bg="black", width=img_resized.width, height=img_resized.height)
+            canvas.create_image(0, 0, image=self.img_tk, anchor=tk.NW)  # self.img_tkを使用
+            canvas.pack()
+
+            canvas.bind("<ButtonPress-1>", lambda event: self.start_point_get(event, canvas))
+            canvas.bind("<B1-Motion>", lambda event: self.rect_drawing(event, canvas))
+            canvas.bind("<ButtonRelease-1>", lambda event: self.release_action(event, canvas))
+
+            root.mainloop()
