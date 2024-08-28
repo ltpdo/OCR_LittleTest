@@ -11,5 +11,7 @@ def processing_order_little_test():
     da2 = littletest.PreprocessingLittleTest()
     # PDFファイルを2値化処理
     #da2.convert_binarized_image()
-
+    # 座標を取得
     da2.annotate_image()
+    #座標を表示
+    da2.display_remove()

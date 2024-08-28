@@ -145,55 +145,39 @@ class PreprocessingLittleTest(LittleTest):
         if selected_pdf_path:
             self.selected_pdf_path = selected_pdf_path
         else:
-            # パスが指定されていない場合、親クラスのメソッドを使ってPDFファイルを選択
             result = self.select_pdf()
             if "Selected PDF path" in result:
                 self.selected_pdf_path = self.selected_pdf_path
             else:
                 raise ValueError("PDFファイルが選択されていません。")
 
+        self.annotator = None  # ImageAnnotator インスタンスを保持する変数
+
     def convert_binarized_image(self):
         image_binarized_list = []
-
-        # 保存先フォルダを作成（存在しない場合は新規作成）
         save_folder = r"C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\BinarizedLittleTestImage"
-        os.makedirs(save_folder, exist_ok=True)  # フォルダが存在しない場合は作成
-
-        # 親クラスのread_and_convertメソッドを呼び出し
+        os.makedirs(save_folder, exist_ok=True)
         image_bgr_list = self.read_and_convert()
 
-        # 取得したimage_bgrを処理
         for i, image_bgr in enumerate(image_bgr_list):
-            # 画像が空でないことを確認
             if image_bgr is None or image_bgr.size == 0:
                 print(f"Image {i + 1} is empty or invalid.")
                 continue
 
-            # 1. 赤色の範囲を定義する (HSV色空間)
             lower_red1 = np.array([0, 50, 50])
             upper_red1 = np.array([70, 255, 255])
             lower_red2 = np.array([170, 50, 50])
             upper_red2 = np.array([180, 255, 255])
 
-            # 画像をHSVに変換
             image_hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
-
-            # 3. 赤色のマスクを作成する
             mask1 = cv2.inRange(image_hsv, lower_red1, upper_red1)
             mask2 = cv2.inRange(image_hsv, lower_red2, upper_red2)
             mask = cv2.bitwise_or(mask1, mask2)
-
-            # 4. 元画像とマスクを用いて赤色の部分を白色にする
             image_bgr[mask == 255] = [255, 255, 255]
-
-            # 5. グレースケールの画像に変換する
             image_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-
-            # 6. 画像を二値化する
             retval, image_binary = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
             image_binarized_list.append(image_binary)
 
-            # 二値化された画像をPILで保存
             image_pil = Image.fromarray(image_binary)
             save_path = os.path.join(save_folder, f"binarized_image_{i + 1}.png")
             try:
@@ -202,7 +186,6 @@ class PreprocessingLittleTest(LittleTest):
             except Exception as e:
                 print(f"Failed to save Image {i + 1}. Error: {e}")
 
-        # 最初の二値化された画像を表示（任意）
         if image_binarized_list:
             self.display_images(image_binarized_list)
 
@@ -217,8 +200,36 @@ class PreprocessingLittleTest(LittleTest):
 
     def annotate_image(self):
         file_path = self.select_file()
-        annotator = self.ImageAnnotator(file_path)
-        annotator.annotate_image()
+        self.annotator = self.ImageAnnotator(file_path)
+        self.annotator.annotate_image()
+
+    def display_rectangles(self):
+        if self.annotator and self.annotator.rectangles:
+            print("Rectangle coordinates:")
+            for i, (start_x, start_y, end_x, end_y) in enumerate(self.annotator.rectangles):
+                print(f"Rectangle {i + 1}: start_x={start_x}, start_y={start_y}, end_x={end_x}, end_y={end_y}")
+        else:
+            print("No rectangles found.")
+
+    def display_remove(self):
+        self.display_rectangles()
+
+        # ここで削除機能を呼び出す例
+        try:
+            index_to_remove = int(input("Enter the rectangle number to remove (or 0 to skip): ")) - 1
+            if index_to_remove >= 0:
+                self.remove_rectangle(index_to_remove)
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+        self.display_rectangles()
+
+    def remove_rectangle(self, index):
+        if self.annotator and 0 <= index < len(self.annotator.rectangles):
+            removed = self.annotator.rectangles.pop(index)
+            print(f"Removed rectangle: {removed}")
+        else:
+            print("Invalid rectangle number.")
 
     class ImageAnnotator:
         def __init__(self, file_path):
@@ -254,6 +265,7 @@ class PreprocessingLittleTest(LittleTest):
 
         def annotate_image(self):
             root = tk.Tk()
+            root.protocol("WM_DELETE_WINDOW", lambda: self.quit_me(root))
             root.attributes("-topmost", True)
 
             img = Image.open(self.file_path)
@@ -262,9 +274,9 @@ class PreprocessingLittleTest(LittleTest):
                 Image.BILINEAR
             )
 
-            self.img_tk = ImageTk.PhotoImage(img_resized, master=root)  # img_tkをインスタンス変数として保存
+            self.img_tk = ImageTk.PhotoImage(img_resized, master=root)
             canvas = tk.Canvas(root, bg="black", width=img_resized.width, height=img_resized.height)
-            canvas.create_image(0, 0, image=self.img_tk, anchor=tk.NW)  # self.img_tkを使用
+            canvas.create_image(0, 0, image=self.img_tk, anchor=tk.NW)
             canvas.pack()
 
             canvas.bind("<ButtonPress-1>", lambda event: self.start_point_get(event, canvas))
@@ -272,3 +284,7 @@ class PreprocessingLittleTest(LittleTest):
             canvas.bind("<ButtonRelease-1>", lambda event: self.release_action(event, canvas))
 
             root.mainloop()
+
+        def quit_me(self, root_window):
+            root_window.quit()
+            root_window.destroy()

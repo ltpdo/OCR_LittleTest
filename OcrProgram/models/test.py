@@ -65,9 +65,3 @@ class ImageAnnotator:
         # 座標を表示
         print(f"start_x: {start_x}, start_y: {start_y}, end_x: {end_x}, end_y: {end_y}")
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.attributes("-topmost", True)
-    file_path = r'C:\Users\桑田倫成\PycharmProjects\OCR_LittleTest\OcrProgram\BinarizedLittleTestImage\binarized_image_1.png'
-    annotator = ImageAnnotator(root, file_path)
-    root.mainloop()
